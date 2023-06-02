@@ -1,0 +1,101 @@
+.App {
+  font-family: sans-serif;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-evenly;
+}
+
+.game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.square {
+  align-items: center;
+  background-color: transparent;
+  border: 3px solid black;
+  color: black;
+  display: flex;
+  font-size: 3rem;
+  font-weight: bold;
+  height: 100px;
+  justify-content: center;
+  width: 100px;
+}
+
+.square:hover {
+  cursor: pointer;
+  background: #0ff30f;
+}
+
+.square:disabled:hover {
+  background: #ff3a3a;
+  cursor: not-allowed;
+}
+
+#square-0,
+#square-1,
+#square-2 {
+  border-top: none;
+}
+
+#square-0,
+#square-3,
+#square-6 {
+  border-left: none;
+}
+
+#square-6,
+#square-7,
+#square-8 {
+  border-bottom: none;
+}
+
+#square-2,
+#square-5,
+#square-8 {
+  border-right: none;
+}
+
+.board {
+  display: grid;
+  width: 300px;
+  height: 300px;
+  grid-template-columns: auto auto auto;
+}
+
+.game-state {
+  font-size: 24px;
+  text-align: center;
+  padding: 20px;
+}
+
+.x-wins {
+  color: green;
+}
+
+.o-wins {
+  color: red;
+}
+
+.still-playing {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.game-header {
+  padding: 22px 0;
+}
+
+.logo {
+  height: 24px;
+  width: 24px;
+  padding: 0 10px;
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 700;
+}
