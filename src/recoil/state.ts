@@ -1,8 +1,10 @@
+import { useCallback } from "react";
 import {
   atom,
   selector,
   selectorFamily,
   useRecoilTransaction_UNSTABLE as useRecoilTransaction,
+  useSetRecoilState,
 } from "recoil";
 import {
   BoardState,
@@ -104,3 +106,11 @@ export const gameStateState = selector({
   key: "gameState",
   get: ({ get }) => getGameState(get(boardState)),
 });
+
+export const useResetGame = () => {
+  const setBoard = useSetRecoilState(boardState);
+
+  return useCallback(() => {
+    setBoard(INITIAL_BOARD);
+  }, [setBoard]);
+};

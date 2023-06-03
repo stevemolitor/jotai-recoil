@@ -40,3 +40,7 @@ export const moveAtom = atom(null, (get, set, index: number) => {
 });
 
 export const gameStateAtom = atom((get) => getGameState(get(boardAtom)));
+
+export const resetGameAtom = atom(null, (_, set) => {
+  set(boardAtom, INITIAL_BOARD);
+});

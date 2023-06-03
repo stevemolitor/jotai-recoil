@@ -6,6 +6,7 @@ import {
   gameStateAtom,
   isDisabledFamily,
   moveAtom,
+  resetGameAtom,
   squareFamily,
 } from "./atoms";
 
@@ -45,6 +46,11 @@ const GameState = () => {
   return <div className={`game-state ${gameState}`}>{gameStateLabel}</div>;
 };
 
+const ResetButton = () => {
+  const resetGame = useSetAtom(resetGameAtom);
+  return <button onClick={resetGame}>Reset Game</button>;
+};
+
 export const TicTacToe = () => (
   <Provider>
     <div className="game">
@@ -53,6 +59,7 @@ export const TicTacToe = () => (
       </GameHeader>
       <Board />
       <GameState />
+      <ResetButton />
     </div>
   </Provider>
 );
