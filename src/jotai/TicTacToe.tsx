@@ -3,11 +3,16 @@ import { useCallback } from "react";
 import { GameHeader } from "../GameHeader";
 import { getGameStateLabel } from "../tictactoe";
 import {
+  canRedoAtom,
+  canResetAtom,
+  canUndoAtom,
   gameStateAtom,
   isDisabledFamily,
   moveAtom,
+  redoAtom,
   resetGameAtom,
   squareFamily,
+  undoAtom,
 } from "./atoms";
 
 const Square = ({ index }: { index: number }) => {
@@ -46,9 +51,37 @@ const GameState = () => {
   return <div className={`game-state ${gameState}`}>{gameStateLabel}</div>;
 };
 
+const UndoButton = () => {
+  const canUndo = useAtomValue(canUndoAtom);
+  const undo = useSetAtom(undoAtom);
+
+  return (
+    <button className="button" disabled={!canUndo} onClick={undo}>
+      Undo
+    </button>
+  );
+};
+
+const RedoButton = () => {
+  const canRedo = useAtomValue(canRedoAtom);
+  const redo = useSetAtom(redoAtom);
+
+  return (
+    <button className="button" disabled={!canRedo} onClick={redo}>
+      Redo
+    </button>
+  );
+};
+
 const ResetButton = () => {
+  const canReset = useAtomValue(canResetAtom);
   const resetGame = useSetAtom(resetGameAtom);
-  return <button onClick={resetGame}>Reset Game</button>;
+
+  return (
+    <button className="button" disabled={!canReset} onClick={resetGame}>
+      Reset
+    </button>
+  );
 };
 
 export const TicTacToe = () => (
@@ -59,7 +92,11 @@ export const TicTacToe = () => (
       </GameHeader>
       <Board />
       <GameState />
-      <ResetButton />
+      <div className="buttons">
+        <UndoButton />
+        <RedoButton />
+        <ResetButton />
+      </div>
     </div>
   </Provider>
 );

@@ -1,13 +1,18 @@
 import { useCallback } from "react";
-import { RecoilRoot, useRecoilValue, useSetRecoilState } from "recoil";
+import { RecoilRoot, useRecoilValue } from "recoil";
 import { GameHeader } from "../GameHeader";
 import { getGameStateLabel } from "../tictactoe";
 import {
+  canRedoState,
+  canResetState,
+  canUndoState,
   gameStateState,
   isDisabledState,
   squareState,
   useMove,
+  useRedo,
   useResetGame,
+  useUndo,
 } from "./state";
 
 const Square = ({ index }: { index: number }) => {
@@ -46,9 +51,37 @@ const GameStateLabel = () => {
   return <div className={`game-state ${gameState}`}>{gameStateLabel}</div>;
 };
 
+const UndoButton = () => {
+  const canUndo = useRecoilValue(canUndoState);
+  const undo = useUndo();
+
+  return (
+    <button className="button" disabled={!canUndo} onClick={undo}>
+      Undo
+    </button>
+  );
+};
+
+const RedoButton = () => {
+  const canRedo = useRecoilValue(canRedoState);
+  const redo = useRedo();
+
+  return (
+    <button className="button" disabled={!canRedo} onClick={redo}>
+      Redo
+    </button>
+  );
+};
+
 const ResetButton = () => {
+  const canReset = useRecoilValue(canResetState);
   const resetGame = useResetGame();
-  return <button onClick={resetGame}>Reset Game</button>;
+
+  return (
+    <button className="button" disabled={!canReset} onClick={resetGame}>
+      Reset
+    </button>
+  );
 };
 
 export const TicTacToe = () => (
@@ -59,7 +92,11 @@ export const TicTacToe = () => (
       </GameHeader>
       <Board />
       <GameStateLabel />
-      <ResetButton />
+      <div className="buttons">
+        <UndoButton />
+        <RedoButton />
+        <ResetButton />
+      </div>
     </div>
   </RecoilRoot>
 );

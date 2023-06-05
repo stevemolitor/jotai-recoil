@@ -2,10 +2,21 @@
 
 export const X = "X";
 export const O = "O";
-const BLANK = " ";
+export const BLANK = " ";
 
 export type SquareState = typeof X | typeof O | typeof BLANK;
+export type GameHistory = number[];
 export type BoardState = SquareState[];
+
+export const getBoardFromHistory = (
+  history: GameHistory,
+  currentMove: number
+) =>
+  history.slice(0, currentMove).reduce<BoardState>((board, square, i) => {
+    const player = i % 2 === 0 ? X : O;
+    board[square] = player;
+    return board;
+  }, new Array(9).fill(BLANK));
 
 // prettier-ignore
 export const INITIAL_BOARD: BoardState = [

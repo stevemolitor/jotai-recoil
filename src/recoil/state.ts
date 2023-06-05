@@ -1,25 +1,33 @@
-import { useCallback } from "react";
 import {
   atom,
   selector,
   selectorFamily,
+  useRecoilCallback,
   useRecoilTransaction_UNSTABLE as useRecoilTransaction,
-  useSetRecoilState,
 } from "recoil";
 import {
-  BoardState,
   computeNextMove,
+  GameHistory,
+  getBoardFromHistory,
   getGameState,
-  INITIAL_BOARD,
   isDisabledSquare,
-  O,
   SquareState,
-  X,
 } from "../tictactoe";
 
-const boardState = atom({
+export const historyState = atom<GameHistory>({
+  key: "history",
+  default: [],
+});
+
+export const currentMoveState = atom<number>({
+  key: "currentMove",
+  default: 0,
+});
+
+const boardState = selector({
   key: "board",
-  default: INITIAL_BOARD,
+  get: ({ get }) =>
+    getBoardFromHistory(get(historyState), get(currentMoveState)),
 });
 
 export const squareState = selectorFamily<SquareState, number>({
@@ -28,20 +36,6 @@ export const squareState = selectorFamily<SquareState, number>({
     (index) =>
     ({ get }) =>
       get(boardState)[index],
-  set:
-    (index) =>
-    ({ get, set }, value) => {
-      const isDisabled = get(isDisabledState(index));
-      if (!isDisabled) {
-        const board = get(boardState);
-        const newBoard = [
-          ...board.slice(0, index),
-          value,
-          ...board.slice(index + 1),
-        ] as BoardState;
-        set(boardState, newBoard);
-      }
-    },
 });
 
 export const isDisabledState = selectorFamily<boolean, number>({
@@ -87,19 +81,23 @@ export const isDisabledState = selectorFamily<boolean, number>({
 
 export const useMove = (index: number) =>
   useRecoilTransaction(({ get, set }) => () => {
-    const board = get(boardState);
-    const boardAfterXMove: BoardState = [
-      ...board.slice(0, index),
-      X,
-      ...board.slice(index + 1),
-    ];
-    const nextIndex = computeNextMove(boardAfterXMove);
-    const boardAfterOMove: BoardState = [
-      ...boardAfterXMove.slice(0, nextIndex),
-      O,
-      ...boardAfterXMove.slice(nextIndex + 1),
-    ];
-    set(boardState, boardAfterOMove);
+    // get history with future (redo) history sliced off
+    const currentMove = get(currentMoveState);
+    const history = get(historyState);
+    const historyWithNoFutureHistory = [...history.slice(0, currentMove)];
+
+    // make X move
+    const historyAfterXMove = [...historyWithNoFutureHistory, index];
+
+    // make computer move
+    const nextIndex = computeNextMove(
+      getBoardFromHistory(historyAfterXMove, currentMove + 1)
+    );
+    const historyAfterOMove = [...historyAfterXMove, nextIndex];
+
+    // set new history, current move states
+    set(historyState, historyAfterOMove);
+    set(currentMoveState, currentMove + 2);
   });
 
 export const gameStateState = selector({
@@ -107,10 +105,41 @@ export const gameStateState = selector({
   get: ({ get }) => getGameState(get(boardState)),
 });
 
-export const useResetGame = () => {
-  const setBoard = useSetRecoilState(boardState);
+export const canUndoState = selector({
+  key: "canUndo",
+  get: ({ get }) => {
+    console.log("currentMoveState", get(currentMoveState));
+    return get(currentMoveState) > 0;
+  },
+});
 
-  return useCallback(() => {
-    setBoard(INITIAL_BOARD);
-  }, [setBoard]);
-};
+export const useUndo = () =>
+  useRecoilCallback(({ set }) => () => {
+    set(currentMoveState, (currentMove) => currentMove - 2);
+  });
+
+export const canRedoState = selector({
+  key: "canRedo",
+  get: ({ get }) => {
+    const numMoves = get(historyState).length;
+    const currentMove = get(currentMoveState);
+    return currentMove + 2 <= numMoves;
+  },
+});
+
+export const useRedo = () =>
+  useRecoilCallback(({ set }) => () => {
+    set(currentMoveState, (currentMove) => currentMove + 2);
+  });
+
+export const canResetState = selector({
+  key: "canReset",
+  get: ({ get }) =>
+    get(historyState).length !== 0 || get(currentMoveState) !== 0,
+});
+
+export const useResetGame = () =>
+  useRecoilTransaction(({ set }) => () => {
+    set(historyState, []);
+    set(currentMoveState, 0);
+  });
