@@ -48,7 +48,11 @@ const GameState = () => {
 
 const ResetButton = () => {
   const resetGame = useSetAtom(resetGameAtom);
-  return <button onClick={resetGame}>Reset Game</button>;
+  return (
+    <button className="button" onClick={resetGame}>
+      Reset Game
+    </button>
+  );
 };
 
 export const TicTacToe = () => (

@@ -48,7 +48,11 @@ const GameStateLabel = () => {
 
 const ResetButton = () => {
   const resetGame = useResetGame();
-  return <button onClick={resetGame}>Reset Game</button>;
+  return (
+    <button className="button" onClick={resetGame}>
+      Reset Game
+    </button>
+  );
 };
 
 export const TicTacToe = () => (
