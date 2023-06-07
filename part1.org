@@ -1,0 +1,637 @@
+#+TITLE:Learning Recoil and Jotai with Tic Tac Toe
+#+SUBTITLE: Part 1 Implement a Basic Tic Tac Toe Game in Recoil and Jotai
+#+OPTIONS: toc:t
+
+Let's learn about [[https://recoiljs.org/][Recoil]] and[[https://jotai.org/][ Jotai]] by implementing a simple Tic Tac Toe game in both. If you already know Recoil and want to learn Jotai this will help. We'll split this up into multiple parts. This first part will focus on managing synchronous state with Recoil and Jotai. Subsequent articles will look at more complicated scenarios, SSR, and asynchronous state. 
+
+Here's what part 1 will look like when complete:
+
+[[https://cdn.zappy.app/713fd2b4670b72eb0be2dfb7d59e8ec7.gif]]
+
+You can check it out in this [[https://codesandbox.io/p/github/stevemolitor/jotai-recoil/basic?file=/README.md:4,1&workspaceId=db029917-85df-413e-a346-9952d7e9c4c9][CodeSandbox]].
+* Code Used in Examples
+Ignoring CSS and boiler plate code, there are 5 important files in the =src= directory:
+- [[https://github.com/stevemolitor/jotai-recoil/blob/basic/src/tictactoe.ts][tictactoe.ts]] :: reusable Tic Tac Toe logic, constants, and types
+- [[https://github.com/stevemolitor/jotai-recoil/blob/basic/src/jotai/atoms.ts][jotai/atoms.ts]] :: Jotai atom definitions
+- [[https://github.com/stevemolitor/jotai-recoil/blob/basic/src/jotai/TicTacToe.tsx][jotai/TicTacToe.tsx]] :: Tic Tac Toe game components that use the Jotai atoms
+- [[https://github.com/stevemolitor/jotai-recoil/blob/basic/src/recoil/state.ts][recoil/state.ts]] :: Recoil state definitions (atoms, selectors, hooks)
+- [[https://github.com/stevemolitor/jotai-recoil/blob/basic/src/recoil/TicTacToe.tsx][recoil/TicTacToe.tsx]] :: Tic Tac Toe game components that use the Recoil state definiitions
+
+ We'll focus on the state and components. We'll mention the the Tic Tac Toe logic only when needed. We're trying to learn about state management, not Tic Tac Toe. ;)
+* Representing the State of a Tic Tac Toe Board in Recoil and Jotai
+Let's warm up by implementing a simple atom containing the state of our Tic Tac Toe board, in both Recoil and Jotai.
+
+We represent the board as a 9 element array of strings, one value for the state of each square: "X", "O", or " " (blank):
+
+#+begin_src ts
+const X = "X";
+const O = "O";
+const BLANK = " ";
+
+type SquareState = typeof X | typeof O | typeof BLANK;
+type BoardState = SquareState[];
+
+const INITIAL_BOARD: BoardState = [
+  BLANK, BLANK, BLANK,
+  BLANK, BLANK, BLANK,
+  BLANK, BLANK, BLANK,
+];
+#+end_src
+
+In Recoil, we can represent the board as an atom:
+
+#+begin_src ts
+const boardState = atom({
+  key: "board",
+  default: INITIAL_BOARD,
+});
+#+end_src
+
+The Jotai atom definition is similar but more concise:
+
+#+begin_src ts
+const boardAtom = atom(INITIAL_BOARD);
+#+end_src
+
+Although seemingly minor, the syntax differences here do point to some deeper differences between the libraries. In Recoil, atoms are identified by string keys. Jotai atoms are identified by object references maintained in a ~WeakMap~:
+
+[[https://cdn.zappy.app/37f5aec05c9ef5a0588f0c92d3770757.png]]
+
+This approach [[https://github.com/pmndrs/jotai/discussions/849#discussioncomment-1705995][simplifies the Jotai implementation]].
+* Preparing for Efficient Rendering - Derived States
+When a player makes a move, we only want that square to re-render, to show an "X" instead of a blank square. Nothing else should re-render. This is of course /waaay/ overkill and a gross premature optimization for this application. But we want to see how we can control rendering with both libraries, and optimizing Tic Tac Toe gives us a simple way to play with that.
+
+So let's create a derived state for each square, such that if the state of a square has not changed, that square will not re-render.
+
+In Recoil we can do that with a ~selectorFamily~, keyed by the square index (=0= - =8=):
+
+#+begin_src ts
+const squareState = selectorFamily<SquareState, number>({
+  key: "squareState",
+  get:
+    (index) =>
+    ({ get }) =>
+      get(boardState)[index],
+});
+#+end_src
+
+In Jotai we can use an atom family:
+
+#+begin_src ts
+const squareFamily = atomFamily((index: number) =>
+  atom(
+    (get) => get(boardAtom)[index],
+);
+#+end_src
+
+* Using State in Components
+We use hooks to grab and render state in React hooks. The two libraries are pretty similar here. In Recoil we can render our board of 9 squares like this:
+
+#+begin_src tsx
+import { RecoilRoot, useRecoilValue } from "recoil";
+
+const Square = ({ index }: { index: number }) => {
+  const value = useRecoilValue(squareState(index));
+
+  return (
+    <button className="square">
+      {value}
+    </button>
+  );
+};
+
+const Board = () => (
+  <div className="board">
+    {[...Array(9)].map((_, i) => (
+      <Square key={i} index={i} />
+    ))}
+  </div>
+);
+
+const TicTacToe = () => (
+  <RecoilRoot>
+    <Board />
+  </RecoilRoot>
+);
+#+end_src
+
+Jotai looks similar:
+
+#+begin_src tsx
+import { Provider, useSetAtom } from "jotai";
+
+const Square = ({ index }: { index: number }) => {
+  const value = useAtomValue(squareFamily(index));
+
+  return (
+    <button className="square">
+      {value}
+    </button>
+  );
+};
+
+const Board = () => (
+  <div className="board">
+    {[...Array(9)].map((_, i) => (
+      <Square key={i} index={i} />
+    ))}
+  </div>
+);
+
+const TicTacToe = () => (
+  <Provider>
+    <Board />
+  </Provider>
+);
+#+end_src
+
+Jotai's [[https://jotai.org/docs/core/provider][Provider]] is similar to [[https://recoiljs.org/docs/api-reference/core/RecoilRoot/][RecoilRoot]]. ~Provider~ provides state to a nested sub-tree. One difference is that in Jotai, Providers are optional and atoms can be used outside of ~Provider~. An atom associates itself with a ~Provider~ as soon as it is used inside a ~Provider~. 
+* Updating State
+At this point our Tic Tac Toe game is pretty boring: you just see a blank board and can't make a move. Let's fix that!
+** Updating State with Jotai
+We'll start with Jotai this time as it's simpler here. In Jotai, an atom is essentially just a pair of functions: a getter function to get the value, and a setter function to set the value. Those functions can refer to other atoms. To set a square then we can add a setter function to our atom definition. 
+
+#+begin_src ts
+const squareFamily = atomFamily((index: number) =>
+  atom(
+    (get) => get(boardAtom)[index],
+    (_get, set, value: SquareState) => {
+      const board = get(boardState);
+      const newBoard = [
+        ...board.slice(0, index),
+        value,
+        ...board.slice(index + 1),
+      ] as BoardState;
+      set(boardState, newBoard);
+    }
+  )
+);
+#+end_src
+
+The setter takes three arguments:
+- ~get~ :: fetch other atom values (not used here)
+- ~set~ :: set an atom value 
+- ~value~ :: the new value
+
+You can call ~set~ on any atom. In this case, we use the spread operator to immutably update the board with the new square value, and set the ~boardAtom~  to the new board.
+*** Using Immer with Jotai
+The code to update the board is pretty gnarly. We can instead use [[https://immerjs.github.io/immer/][Immer]] via Jotai's [[https://jotai.org/docs/integrations/immer#atomwithimmer][atomWithImmer]] function to simplify things:
+
+#+begin_src ts
+const boardAtom = atomWithImmer(INITIAL_BOARD);
+
+export const squareFamily = atomFamily((index: number) =>
+  atom(
+    (get) => get(boardAtom)[index],
+    (get, set, value: SquareState) => {
+      set(boardAtom, (board) => {
+        board[index] = value;
+      });
+    }
+  )
+);
+#+end_src
+
+It /looks/ like we're mutating the ~board~ object, but we're not. Thru the magic of Immer, the board mutations inside the ~set~ function are recorded, and Immer handles the immutable update.
+
+We can use our new ~squareFamily~ to add interactivity to our ~Square~ component:
+
+#+begin_src ts
+const Square = ({ index }: { index: number }) => {
+  const [value, setValue] = useAtom(squareFamily(index));
+
+  const onClick = useCallback(() => {
+    setValue(X);
+  }, [index, setValue]);
+
+  return (
+    <button className="square" onClick={onClick}>
+      {value}
+    </button>
+  );
+};
+#+end_src
+
+Every time the user clicks on a square, we set the square to "X". The user can fill the entire board with "X"'s. ;) Let's change that to let the computer make "O" moves. When the user clicks on a square, we'll first set that square to "X", and then let the computer make an "O" move. We've implemented a ~computeNextMove~ function that uses a [[https://github.com/stevemolitor/jotai-recoil/blob/basic/src/tictactoe.ts#L86][sophisticated AI algorithm]] to compute a move. ;) Let's use that in a write-only ~move~ atom:
+
+#+begin_src ts
+export const moveAtom = atom(null, (get, set, index: number) => {
+  // make X move:
+  set(squareFamily(index), X);
+
+  // grab the new board state and use to compute the O move:
+  const board = get(boardAtom);
+  const nextIndex = computeNextMove(board);
+
+  // make the O move:
+  set(squareFamily(nextIndex), O);
+});
+#+end_src
+
+Note that we pass ~null~ as the getter function, since this atom is write-only. The setter function takes the same three arguments as mentioned about, ~get~ (to get atom values), ~set~ (to set values), and the value used in the update. In this case we do use ~get~ to get the new board value after making the "X" move. The "new value" here is just the square index, and we use that to make the initial move while the computer randomly selects the next move after that. So atom "setters" in Jotai can do pretty much anything you want, and replace things like ~useRecoilCallback~ or ~useRecoilTransaction_UNSTABLE~.
+
+We can update our ~Square~ component to use our new ~move~ atom:
+
+#+begin_src ts
+const Square = ({ index }: { index: number }) => {
+  const value = useAtomValue(squareFamily(index));
+  const move = useSetAtom(moveAtom);
+
+  const onClick = useCallback(() => {
+    move(index);
+  }, [index, move]);
+
+  return (
+    <button className="square" onClick={onClick}>
+      {value}
+    </button>
+  );
+};
+#+end_src
+** Updating State with Recoil
+My first attempt was to use a writeable Recoil selector, similar to using a writeable atom with Jotai. That doesn't work however once we add the computer move. The selector function needs to update the state with the "X" move, /read/ the board state to get the new board state, and then pass the board to ~computeNextMove~ to get the "O" move. Unfortunately Recoil freezes the state at teh beginning of the selector ~set~ function, and ~get~ cannot "see" the updates:
+
+#+begin_src ts
+// this does not work:
+export const moveState = selector<any>({
+  key: "move",
+  get: () => 0,
+  set: ({ get, set }, index: number) => {
+    set(squareState(index), X);
+
+    // does not see update:
+    const board = get(boardState);
+    const nextIndex = computeNextMove(board);
+    
+    set(squareState(nextIndex), O);
+  },
+});
+#+end_src
+
+Since the ~board~ passed to ~computeNextMove~ does not include the "X" move, the computer will sometimes randomly select that move and stomp on the "X" with an "O", yielding an invalid board state.
+
+~useRecoilCallback~ won't work either, as it is passed an immutable Recoil [[https://recoiljs.org/docs/api-reference/core/Snapshot/][snapshot]].
+
+~useRecoilTransaction_UNSTABLE~ would /almost/  work as writes /are/ visible to subsequent reads from within the same transaction. However you can write to atoms in transactions, not writable selectors. So this does /not/ work:
+
+#+begin_src ts
+export const useMove = (index: number) =>
+  useRecoilTransaction(({ get, set }) => () => {
+    // throws error:
+    set(squareState(index), X);
+    
+    const board = get(boardState);
+    const nextIndex = computeNextMove(board);
+    set(squareState(nextIndex), O);
+  });
+#+end_src
+
+The above throws this error:
+
+[[https://cdn.zappy.app/5cb3d88d301ca783b6a7dc1ddda4fd64.png]]
+
+As a last resort we can use a custom React hook:
+
+#+begin_src ts
+export const useMove = (index: number) =>
+  useRecoilTransaction(({ get, set }) => () => {
+    const board = get(boardState);
+    const boardAfterXMove: BoardState = [
+      ...board.slice(0, index),
+      X,
+      ...board.slice(index + 1),
+    ];
+    const nextIndex = computeNextMove(boardAfterXMove);
+    const boardAfterOMove: BoardState = [
+      ...boardAfterXMove.slice(0, nextIndex),
+      O,
+      ...boardAfterXMove.slice(nextIndex + 1),
+    ];
+    set(boardState, boardAfterOMove);
+  });
+#+end_src
+
+This is not really satisfactory, but it does "work". We can use this hook in our ~Square~ component:
+
+#+begin_src ts
+const Square = ({ index }: { index: number }) => {
+  const value = useRecoilValue(squareState(index));
+  const move = useMove(index);
+
+  const onClick = useCallback(() => {
+    move();
+  }, [index, move]);
+
+  return (
+    <button className="square" onClick={onClick}>
+      {value}
+    </button>
+  );
+};
+#+end_src
+* Adding Read Only Derived State
+As it stands, users can make invalid moves: they can override an existing square, or try to make a move after the game is over. Let's fix that. We have a [[https://github.com/stevemolitor/jotai-recoil/blob/basic/src/tictactoe.ts#L79-L80][isDisabledSquare]] util function that takes a board and a square index, and  returns ~true~ if the square should be disabled.
+
+One way to do this would be to grab the entire board state in our ~Square~ component and use it there. The problem with that though is that any time /any/ square on the board was updated, all squares would re-render. As @FokkeZB has said, it's better to [[https://async.zapier.com/p/62948/recoil-best-practices#stay][Stay in Recoil [or Jotai] as long as you can]].
+
+Instead we'll write a read-only selector in Recoil, and a read-only derived atom in Jotai.
+** Jotai ~isDisableSquare~ Family
+In Jotai we'll create a read-only atom family that grabs the current board state, passing the board and square index to our ~isDisableSquare~ util function:
+
+#+begin_src ts
+const isDisabledFamily = atomFamily((index: number) =>
+  atom((get) => isDisabledSquare(get(boardAtom), index))
+);
+#+end_src
+
+Components using this atom will only re-render if the disabled state of their square has changed:
+
+#+begin_src tsx
+const Square = ({ index }: { index: number }) => {
+  const value = useAtomValue(squareFamily(index));
+  const isDisabled = useAtomValue(isDisabledFamily(index));
+  const move = useSetAtom(moveAtom);
+
+  const onClick = useCallback(() => {
+    move(index);
+  }, [index, move]);
+
+  return (
+    <button
+      className="square"
+      disabled={isDisabled}
+      onClick={onClick}
+    >
+      {value}
+    </button>
+  );
+};
+#+end_src
+
+** Recoil ~isDisabledState~ Selector Family
+In Recoil we can create a similar selector family:
+
+#+begin_src ts
+const isDisabledState = selectorFamily<boolean, number>({
+  key: "isDisabled",
+  get:
+    (index) =>
+    ({ get }) =>
+      isDisabledSquare(get(boardState), index),
+});
+#+end_src
+
+Usage is also similar:
+
+#+begin_src tsx
+const Square = ({ index }: { index: number }) => {
+  const value = useRecoilValue(squareState(index));
+  const isDisabled = useRecoilValue(isDisabledState(index));
+  const move = useMove(index);
+
+  const onClick = useCallback(() => {
+    move();
+  }, [index, move]);
+
+  return (
+    <button
+      id={`square-${index}`}
+      className="square"
+      disabled={isDisabled}
+      onClick={onClick}
+    >
+      {value}
+    </button>
+  );
+};
+#+end_src
+* Putting It All Together
+Here are the juicy bits of each implementation:
+** Recoil Tic Tac Toe
+Here's the Recoil atoms, selectors, and state management hooks:
+#+begin_src ts
+const boardState = atom({
+  key: "board",
+  default: INITIAL_BOARD,
+});
+
+const squareState = selectorFamily<SquareState, number>({
+  key: "squareState",
+  get:
+    (index) =>
+    ({ get }) =>
+      get(boardState)[index],
+  set:
+    (index) =>
+    ({ get, set }, value) => {
+      const isDisabled = get(isDisabledState(index));
+      if (!isDisabled) {
+        const board = get(boardState);
+        const newBoard = [
+          ...board.slice(0, index),
+          value,
+          ...board.slice(index + 1),
+        ] as BoardState;
+        set(boardState, newBoard);
+      }
+    },
+});
+
+const isDisabledState = selectorFamily<boolean, number>({
+  key: "isDisabled",
+  get:
+    (index) =>
+    ({ get }) =>
+      isDisabledSquare(get(boardState), index),
+});
+
+const useMove = (index: number) =>
+  useRecoilTransaction(({ get, set }) => () => {
+    const board = get(boardState);
+    const boardAfterXMove: BoardState = [
+      ...board.slice(0, index),
+      X,
+      ...board.slice(index + 1),
+    ];
+    const nextIndex = computeNextMove(boardAfterXMove);
+    const boardAfterOMove: BoardState = [
+      ...boardAfterXMove.slice(0, nextIndex),
+      O,
+      ...boardAfterXMove.slice(nextIndex + 1),
+    ];
+    set(boardState, boardAfterOMove);
+  });
+
+const gameStateState = selector({
+  key: "gameState",
+  get: ({ get }) => getGameState(get(boardState)),
+});
+#+end_src
+
+Here is how the state is used in the React Components:
+
+#+begin_src tsx
+const Square = ({ index }: { index: number }) => {
+  const value = useRecoilValue(squareState(index));
+  const isDisabled = useRecoilValue(isDisabledState(index));
+  const move = useMove(index);
+
+  const onClick = useCallback(() => {
+    move();
+  }, [index, move]);
+
+  return (
+    <button
+      className="square"
+      disabled={isDisabled}
+      onClick={onClick}
+    >
+      {value}
+    </button>
+  );
+};
+
+const Board = () => (
+  <div className="board">
+    {[...Array(9)].map((_, i) => (
+      <Square key={i} index={i} />
+    ))}
+  </div>
+);
+
+const GameStateLabel = () => {
+  const gameState = useRecoilValue(gameStateState);
+  const gameStateLabel = getGameStateLabel(gameState);
+
+  return <div className={`game-state ${gameState}`}>{gameStateLabel}</div>;
+};
+
+const TicTacToe = () => (
+  <RecoilRoot>
+    <div className="game">
+      <GameHeader imgSrc="https://bestofjs.org/logos/recoil.svg">
+        Recoil Tic Tac Toe
+      </GameHeader>
+      <Board />
+      <GameStateLabel />
+    </div>
+  </RecoilRoot>
+);
+#+end_src
+** Jotai Tic Tac Toe
+Here's the Jotai atoms. Note that everything is an atom, or atom family:
+
+#+begin_src ts
+const boardAtom = atomWithImmer(INITIAL_BOARD);
+
+const squareFamily = atomFamily((index: number) =>
+  atom(
+    (get) => get(boardAtom)[index],
+    (get, set, value: SquareState) => {
+      const isDisabled = get(isDisabledFamily(index));
+      if (!isDisabled) {
+        set(boardAtom, (board) => {
+          board[index] = value;
+        });
+      }
+    }
+  )
+);
+
+const isDisabledFamily = atomFamily((index: number) =>
+  atom((get) => isDisabledSquare(get(boardAtom), index))
+);
+
+const moveAtom = atom(null, (get, set, index: number) => {
+  set(squareFamily(index), X);
+  const board = get(boardAtom);
+  const nextIndex = computeNextMove(board);
+  set(squareFamily(nextIndex), O);
+});
+
+const gameStateAtom = atom((get) => getGameState(get(boardAtom)));
+#+end_src
+
+Here's how we use the atoms in the components:
+
+#+begin_src tsx
+const Square = ({ index }: { index: number }) => {
+  const value = useAtomValue(squareFamily(index));
+  const isDisabled = useAtomValue(isDisabledFamily(index));
+  const move = useSetAtom(moveAtom);
+
+  const onClick = useCallback(() => {
+    move(index);
+  }, [index, move]);
+
+  return (
+    <button
+      className="square"
+      disabled={isDisabled}
+      onClick={onClick}
+    >
+      {value}
+    </button>
+  );
+};
+
+const Board = () => (
+  <div className="board">
+    {[...Array(9)].map((_, i) => (
+      <Square key={i} index={i} />
+    ))}
+  </div>
+);
+
+const GameState = () => {
+  const gameState = useAtomValue(gameStateAtom);
+  const gameStateLabel = getGameStateLabel(gameState);
+
+  return <div className={`game-state ${gameState}`}>{gameStateLabel}</div>;
+};
+
+export const TicTacToe = () => (
+  <Provider>
+    <div className="game">
+      <GameHeader imgSrc="https://storage.googleapis.com/candycode/jotai/jotai-mascot.png">
+        Jotai Tic Tac Toe
+      </GameHeader>
+      <Board />
+      <GameState />
+    </div>
+  </Provider>
+);
+#+end_src
+* Bonus Topic - Custom Equality Functions
+Jotai does have a [[https://jotai.org/docs/utilities/select][selectAtom]] function to create memoized atom selectors. This is helpful when the selector logic itself is expensive, or more commonly when you have a derived atom that creates new objects, breaking reference based equality tests, which can cause extra renders. In those cases we can supply a custom equality function to stabilize the derived value:
+
+#+begin_src ts
+import { atom } from "jotai";
+import { selectAtom } from "jotai/utils";
+import { isEqual } from "lodash";
+
+const personAtom = atom({ fname: "Daishi", lname: "Kato"})
+
+const fullNameAtom = selectAtom(
+  personAtom,
+  ({ fname, lname }) => `${fname} ${lname}`,
+  isEqual // just an example - a shallow compare could be more appropriate
+);
+#+end_src
+
+Also see [[https://jotai.org/docs/recipes/atom-creators#atomwithcompare][atomWithCompare]].
+
+For Recoil @FokkeZB implemented two custom selectors for when you want deep equality semantics for selectors, [[https://gitlab.com/zapier/team-zap-creation-infinity/editor/-/blob/development/packages/editor/src/utils/recoil/equal/equalSelector.ts#L16][equalSelector]] and [[https://gitlab.com/zapier/team-zap-creation-infinity/editor/-/blob/development/packages/editor/src/utils/recoil/equal/equalSelectorFamily.ts#L21][equalSelectorFamily]].
+
+Recoil provides more options to tune the cache policy (when to evict, max size, etc) via it's [[https://recoiljs.org/docs/api-reference/core/selector#cache-policy-configuration][cachePolicy_UNSTABLE]] selector property.
+* Economy of Concepts in Recoil and Jotai
+That's it for now, but here's a first impression:
+
+Compared to Recoil, Jotai does more with less. In Jotai, simple "selectors" are just atoms that ~get~ other atoms to compute a derived state.  Whereas Recoil has atoms, selectors, callback functions (~useRecoilCallback~), and transactions (~useRecoilTransaction~), Jotai just has atoms. In Jotai, a selector is just an atom with a getter that refers to another atom. ~useRecoilCallback~ is just an atom setter that sets multiple atoms. Jotai relies on React batching to avoid the need for ~useRecoilTransaction~; you just use an atom setter.
+* Links
+- [[https://github.com/stevemolitor/jotai-recoil/tree/basic][Tic Tac Toe in Jotai and Recoil Part 1, Basic Implementation - Code]]
+- [[https://codesandbox.io/p/github/stevemolitor/jotai-recoil/basic][Tic Tac Toe in Jotai and Recoil Part 1, Basic Implementation - CodeSandbox]]
+- [[https://github.com/stevemolitor/jotai-recoil/tree/reset-button][Tic Tac Toe in Jotai and Recoil Part 2, Adding Reset Functionality - Code]]
+- [[https://codesandbox.io/p/github/stevemolitor/jotai-recoil/reset-button][Tic Tac Toe in Jotai and Recoil Part 2, Adding Reset Functionality - CodeSandbox]]
+- [[https://github.com/stevemolitor/jotai-recoil/tree/undo-redo][Tic Tac Toe in Jotai and Recoil Part 3, Adding Game History (Undo / Redo) - Code]]
+- [[https://codesandbox.io/p/github/stevemolitor/jotai-recoil/undo-redo][Tic Tac Toe in Jotai and Recoil Part 3, Adding Game History (Undo / Redo) - CodeSandbox]]
