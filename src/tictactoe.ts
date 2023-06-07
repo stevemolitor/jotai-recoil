@@ -20,9 +20,9 @@ export const getBoardFromHistory = (
 
 // prettier-ignore
 export const INITIAL_BOARD: BoardState = [
-  " ", " ", " ",
-  " ", " ", " ",
-  " ", " ", " ",
+  BLANK, BLANK, BLANK,
+  BLANK, BLANK, BLANK,
+  BLANK, BLANK, BLANK,
 ];
 
 const MAGIC_SQUARE = [8, 1, 6, 3, 5, 7, 4, 9, 2];
