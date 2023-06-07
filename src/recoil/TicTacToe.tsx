@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { RecoilRoot, useRecoilValue, useSetRecoilState } from "recoil";
+import { RecoilRoot, useRecoilValue } from "recoil";
 import { GameHeader } from "../GameHeader";
 import { getGameStateLabel } from "../tictactoe";
 import {
