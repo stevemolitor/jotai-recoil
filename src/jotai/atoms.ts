@@ -1,5 +1,6 @@
 import { atom } from "jotai";
 import { atomFamily } from "jotai/utils";
+import { saveGame } from "../tictacdb";
 
 import {
   computeNextMove,
@@ -7,14 +8,33 @@ import {
   getGameState,
   GameHistory,
   getBoardFromHistory,
+  Game,
+  EMPTY_GAME,
 } from "../tictactoe";
 
-export const historyAtom = atom([] as GameHistory);
-export const currentMoveAtom = atom(0);
+export const baseGameAtom = atom(EMPTY_GAME);
 
-const boardAtom = atom((get) =>
-  getBoardFromHistory(get(historyAtom), get(currentMoveAtom))
+export const gameAtom = atom(
+  (get) => get(baseGameAtom),
+  (_, set, game: Game) => {
+    set(baseGameAtom, game);
+    saveGame(game);
+  }
 );
+
+export const historyAtom = atom(
+  (get) => get(gameAtom).history,
+  (get, set, history: GameHistory) =>
+    set(gameAtom, { ...get(gameAtom), history })
+);
+
+export const currentMoveAtom = atom(
+  (get) => get(gameAtom).currentMove,
+  (get, set, currentMove: number) =>
+    set(gameAtom, { ...get(gameAtom), currentMove })
+);
+
+const boardAtom = atom((get) => getBoardFromHistory(get(gameAtom)));
 
 export const squareFamily = atomFamily((index: number) =>
   atom(
@@ -22,8 +42,8 @@ export const squareFamily = atomFamily((index: number) =>
     (get, set) => {
       const isDisabled = get(isDisabledFamily(index));
       if (!isDisabled) {
-        set(currentMoveAtom, (currentMove) => currentMove + 1);
-        set(historyAtom, (history) => [...history, index]);
+        set(currentMoveAtom, get(currentMoveAtom) + 1);
+        set(historyAtom, [...get(historyAtom), index]);
       }
     }
   )
@@ -34,7 +54,7 @@ export const isDisabledFamily = atomFamily((index: number) =>
 );
 
 const clearFutureHistoryAtom = atom(null, (get, set) => {
-  set(historyAtom, (history) => history.slice(0, get(currentMoveAtom)));
+  set(historyAtom, get(historyAtom).slice(0, get(currentMoveAtom)));
 });
 
 const playerMoveAtom = atom(null, (_, set, index: number) => {
@@ -57,8 +77,8 @@ export const gameStateAtom = atom((get) => getGameState(get(boardAtom)));
 
 export const canUndoAtom = atom((get) => get(currentMoveAtom) > 0);
 
-export const undoAtom = atom(null, (_, set) => {
-  set(currentMoveAtom, (currentMove) => currentMove - 2);
+export const undoAtom = atom(null, (get, set) => {
+  set(currentMoveAtom, get(currentMoveAtom) - 2);
 });
 
 export const canRedoAtom = atom((get) => {
@@ -66,10 +86,9 @@ export const canRedoAtom = atom((get) => {
   const currentMove = get(currentMoveAtom);
   return currentMove + 2 <= numMoves;
 });
-3;
 
-export const redoAtom = atom(null, (_, set) => {
-  set(currentMoveAtom, (currentMove) => currentMove + 2);
+export const redoAtom = atom(null, (get, set) => {
+  set(currentMoveAtom, get(currentMoveAtom) + 2);
 });
 
 export const canResetAtom = atom((get) => {

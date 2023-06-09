@@ -27,7 +27,10 @@ export const currentMoveState = atom<number>({
 const boardState = selector({
   key: "board",
   get: ({ get }) =>
-    getBoardFromHistory(get(historyState), get(currentMoveState)),
+    getBoardFromHistory({
+      history: get(historyState),
+      currentMove: get(currentMoveState),
+    }),
 });
 
 export const squareState = selectorFamily<SquareState, number>({
@@ -91,7 +94,10 @@ export const useMove = (index: number) =>
 
     // make computer move
     const nextIndex = computeNextMove(
-      getBoardFromHistory(historyAfterXMove, currentMove + 1)
+      getBoardFromHistory({
+        history: historyAfterXMove,
+        currentMove: currentMove + 1,
+      })
     );
     const historyAfterOMove = [...historyAfterXMove, nextIndex];
 

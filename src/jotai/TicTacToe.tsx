@@ -1,11 +1,13 @@
 import { Provider, useAtomValue, useSetAtom } from "jotai";
+import { useHydrateAtoms } from "jotai/utils";
 import { useCallback } from "react";
 import { GameHeader } from "../GameHeader";
-import { getGameStateLabel } from "../tictactoe";
+import { getGameStateLabel, Game } from "../tictactoe";
 import {
   canRedoAtom,
   canResetAtom,
   canUndoAtom,
+  gameAtom,
   gameStateAtom,
   isDisabledFamily,
   moveAtom,
@@ -84,12 +86,15 @@ const ResetButton = () => {
   );
 };
 
-export const TicTacToe = () => (
-  <Provider>
-    <div className="game">
-      <GameHeader imgSrc="https://storage.googleapis.com/candycode/jotai/jotai-mascot.png">
-        Jotai Tic Tac Toe
-      </GameHeader>
+interface GameProps {
+  game: Game;
+}
+
+const GameContainer = ({ game }: GameProps) => {
+  useHydrateAtoms([[gameAtom, game]]);
+
+  return (
+    <>
       <Board />
       <GameState />
       <div className="buttons">
@@ -97,6 +102,17 @@ export const TicTacToe = () => (
         <RedoButton />
         <ResetButton />
       </div>
+    </>
+  );
+};
+
+export const TicTacToe = ({ game }: GameProps) => (
+  <Provider>
+    <div className="game">
+      <GameHeader imgSrc="https://storage.googleapis.com/candycode/jotai/jotai-mascot.png">
+        Jotai Tic Tac Toe
+      </GameHeader>
+      <GameContainer game={game} />
     </div>
   </Provider>
 );

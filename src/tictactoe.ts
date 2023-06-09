@@ -7,11 +7,14 @@ export const BLANK = " ";
 export type SquareState = typeof X | typeof O | typeof BLANK;
 export type GameHistory = number[];
 export type BoardState = SquareState[];
+export interface Game {
+  history: GameHistory;
+  currentMove: number;
+}
 
-export const getBoardFromHistory = (
-  history: GameHistory,
-  currentMove: number
-) =>
+export const EMPTY_GAME: Game = { history: [], currentMove: 0 };
+
+export const getBoardFromHistory = ({ history, currentMove }: Game) =>
   history.slice(0, currentMove).reduce<BoardState>((board, square, i) => {
     const player = i % 2 === 0 ? X : O;
     board[square] = player;
