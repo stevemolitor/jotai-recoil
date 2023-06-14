@@ -1,13 +1,11 @@
 import "./styles.css";
 
-import { TicTacToe as JotaiTicTacToe } from "./jotai/TicTacToe";
-import { TicTacToe as RecoilTicTacToe } from "./recoil/TicTacToe";
+import { JotaiRecoilBridge } from "./JotaiRecoilBridge";
 
 const App = () => {
   return (
     <div className="App">
-      <JotaiTicTacToe />
-      <RecoilTicTacToe />
+      <JotaiRecoilBridge />
     </div>
   );
 };
