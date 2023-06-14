@@ -38,7 +38,7 @@ let recoilStore: RecoilStore = {
   },
 };
 
-const RecoilStoreProvider = () => {
+const RecoilStoreProvider = ({ children }: { children: ReactNode }) => {
   const get = useRecoilCallback(
     ({ snapshot }) =>
       <T,>(state: RecoilValue<T>) =>
@@ -50,28 +50,34 @@ const RecoilStoreProvider = () => {
     ({ set }) =>
       <T,>(state: RecoilState<T>, valOrUpdater: RecoilUpdater<T>) => {
         set(state, valOrUpdater);
-      }
+      },
+    []
   );
 
   recoilStore = { get, set };
 
-  return null;
+  return <>{children}</>;
 };
 
 const jotaiStore = createStore();
 
+const forceEval = recoilAtom({
+  key: "forceEval",
+  default: 0,
+});
+
 const jotaiCount = jotaiAtom(0);
 
-const alwaysChanging = recoilAtom({
-  key: "alwaysChanging",
-  default: 0,
+let magicNumber = 0;
+
+jotaiStore.sub(jotaiCount, () => {
+  recoilStore.set(forceEval, magicNumber++);
 });
 
 const recoilCount = recoilSelector<number>({
   key: "recoilProxy",
   get: ({ get }) => {
-    const n = get(alwaysChanging);
-    recoilStore.set(alwaysChanging, n + 1);
+    get(forceEval);
     return jotaiStore.get(jotaiCount);
   },
   set: (_, newCount) => {
@@ -84,7 +90,8 @@ const Count = () => {
   const jCount = useJotaiAtomValue(jotaiCount);
 
   const increment = useCallback(() => {
-    setRCount((count) => count + 1);
+    // setRCount((count) => count + 1);
+    setRCount(rCount + 1);
   }, [rCount, setRCount]);
 
   return (
@@ -100,8 +107,9 @@ export const JotaiRecoilBridge = () => {
   return (
     <Provider store={jotaiStore}>
       <RecoilRoot>
-        <RecoilStoreProvider />
-        <Count />
+        <RecoilStoreProvider>
+          <Count />
+        </RecoilStoreProvider>
       </RecoilRoot>
     </Provider>
   );
