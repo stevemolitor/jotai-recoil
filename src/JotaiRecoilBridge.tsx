@@ -4,33 +4,78 @@ import {
   Provider,
   useAtomValue as useJotaiAtomValue,
 } from "jotai";
-import { useCallback } from "react";
+import { ReactNode, useCallback } from "react";
 import {
+  atom as recoilAtom,
   selector as recoilSelector,
   RecoilRoot,
   useRecoilState,
-  selectorFamily as recoilSelectorFamily,
+  useRecoilCallback,
+  RecoilValue,
+  RecoilState,
 } from "recoil";
+
+type RecoilGet = <T>(state: RecoilValue<T>) => T;
+
+type RecoilUpdater<T> = T | ((val: T) => T);
+
+type RecoilSet = <T>(
+  state: RecoilState<T>,
+  valOrUpdater: RecoilUpdater<T>
+) => void;
+
+interface RecoilStore {
+  get: RecoilGet;
+  set: RecoilSet;
+}
+
+let recoilStore: RecoilStore = {
+  get: () => {
+    throw new Error("recoilStore not initialized");
+  },
+  set: () => {
+    throw new Error("recoilStore not initialized");
+  },
+};
+
+const RecoilStoreProvider = ({ children }: { children: ReactNode }) => {
+  const get = useRecoilCallback(
+    ({ snapshot }) =>
+      <T,>(state: RecoilValue<T>) =>
+        snapshot.getLoadable(state).contents,
+    []
+  );
+
+  const set = useRecoilCallback(
+    ({ set }) =>
+      <T,>(state: RecoilState<T>, valOrUpdater: RecoilUpdater<T>) => {
+        set(state, valOrUpdater);
+      }
+  );
+
+  recoilStore = { get, set };
+
+  return <>{children}</>;
+};
 
 const jotaiStore = createStore();
 
-const jotaiCount = jotaiAtom(0);
+const jotaiCount = jotaiAtom(1);
 
-let familyParam = 0;
-
-const recoilCountFamily = recoilSelectorFamily<number, number>({
-  key: "recoilFamily",
-  get: (_param) => () => jotaiStore.get(jotaiCount),
-  set: (_param) => (_, newCount) => {
-    jotaiStore.set(jotaiCount, newCount as number);
-  },
+const forceEval = recoilAtom({
+  key: "forceEval",
+  default: 0,
 });
 
 const recoilCount = recoilSelector<number>({
   key: "recoilProxy",
-  get: ({ get }) => get(recoilCountFamily(familyParam++)),
+  get: ({ get }) => {
+    get(forceEval);
+    return jotaiStore.get(jotaiCount);
+  },
   set: ({ set }, newCount) => {
-    set(recoilCountFamily(familyParam), newCount);
+    set(forceEval, (val) => val + 1);
+    jotaiStore.set(jotaiCount, newCount as number);
   },
 });
 
@@ -38,7 +83,7 @@ const Count = () => {
   const [rCount, setRCount] = useRecoilState(recoilCount);
   const jCount = useJotaiAtomValue(jotaiCount);
 
-  const increment = useCallback(() => {
+  const incrementJotai = useCallback(() => {
     setRCount((count) => count + 1);
   }, [rCount, setRCount]);
 
@@ -46,7 +91,9 @@ const Count = () => {
     <div>
       <div>Recoil Count: {rCount}</div>
       <div>Jotai Count: {jCount}</div>
-      <button onClick={increment}>increment</button>
+      <button onClick={incrementJotai}>
+        increment count via recoil to jotai proxy
+      </button>
     </div>
   );
 };
@@ -55,7 +102,9 @@ export const JotaiRecoilBridge = () => {
   return (
     <Provider store={jotaiStore}>
       <RecoilRoot>
-        <Count />
+        <RecoilStoreProvider>
+          <Count />
+        </RecoilStoreProvider>
       </RecoilRoot>
     </Provider>
   );
