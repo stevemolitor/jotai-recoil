@@ -9,18 +9,28 @@ import {
   selector as recoilSelector,
   RecoilRoot,
   useRecoilState,
-  DefaultValue,
+  selectorFamily as recoilSelectorFamily,
 } from "recoil";
 
 const jotaiStore = createStore();
 
 const jotaiCount = jotaiAtom(0);
 
-const recoilCount = recoilSelector({
+let familyParam = 0;
+
+const recoilCountFamily = recoilSelectorFamily<number, number>({
+  key: "recoilFamily",
+  get: (_param) => () => jotaiStore.get(jotaiCount),
+  set: (_param) => (_, newCount) => {
+    jotaiStore.set(jotaiCount, newCount as number);
+  },
+});
+
+const recoilCount = recoilSelector<number>({
   key: "recoilProxy",
-  get: () => jotaiStore.get(jotaiCount),
-  set: (_, newCount) => {
-    jotaiStore.set(jotaiCount, newCount instanceof DefaultValue ? 0 : newCount);
+  get: ({ get }) => get(recoilCountFamily(familyParam++)),
+  set: ({ set }, newCount) => {
+    set(recoilCountFamily(familyParam), newCount);
   },
 });
 
@@ -34,7 +44,6 @@ const Count = () => {
 
   return (
     <div>
-      <p>This version is too naive. The recoi</p>
       <div>Recoil Count: {rCount}</div>
       <div>Jotai Count: {jCount}</div>
       <button onClick={increment}>increment</button>
