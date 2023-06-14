@@ -2,103 +2,70 @@ import {
   atom as jotaiAtom,
   createStore,
   Provider,
-  useAtomValue as useJotaiAtomValue,
+  useAtom as useJotaiAtom,
 } from "jotai";
-import { ReactNode, useCallback, useEffect } from "react";
-import {
-  atom as recoilAtom,
-  selector as recoilSelector,
-  RecoilRoot,
-  useRecoilState,
-  useRecoilCallback,
-  RecoilValue,
-  RecoilState,
-} from "recoil";
-
-type RecoilGet = <T>(state: RecoilValue<T>) => T;
-
-type RecoilUpdater<T> = T | ((val: T) => T);
-
-type RecoilSet = <T>(
-  state: RecoilState<T>,
-  valOrUpdater: RecoilUpdater<T>
-) => void;
-
-interface RecoilStore {
-  get: RecoilGet;
-  set: RecoilSet;
-}
-
-let recoilStore: RecoilStore = {
-  get: () => {
-    throw new Error("recoilStore not initialized");
-  },
-  set: () => {
-    throw new Error("recoilStore not initialized");
-  },
-};
-
-const RecoilStoreProvider = ({ children }: { children: ReactNode }) => {
-  const get = useRecoilCallback(
-    ({ snapshot }) =>
-      <T,>(state: RecoilValue<T>) =>
-        snapshot.getLoadable(state).contents,
-    []
-  );
-
-  const set = useRecoilCallback(
-    ({ set }) =>
-      <T,>(state: RecoilState<T>, valOrUpdater: RecoilUpdater<T>) => {
-        set(state, valOrUpdater);
-      },
-    []
-  );
-
-  recoilStore = { get, set };
-
-  return <>{children}</>;
-};
+import { useCallback } from "react";
+import { atom as recoilAtom, RecoilRoot, useRecoilState } from "recoil";
 
 const jotaiStore = createStore();
 
-const forceEval = recoilAtom({
-  key: "forceEval",
-  default: 0,
-});
-
 const jotaiCount = jotaiAtom(0);
 
-let magicNumber = 0;
-
-jotaiStore.sub(jotaiCount, () => {
-  recoilStore.set(forceEval, magicNumber++);
-});
-
-const recoilCount = recoilSelector<number>({
+const recoilCount = recoilAtom<number>({
   key: "recoilProxy",
-  get: ({ get }) => {
-    get(forceEval);
-    return jotaiStore.get(jotaiCount);
-  },
-  set: (_, newCount) => {
-    jotaiStore.set(jotaiCount, newCount as number);
-  },
+  effects: [
+    ({ onSet, trigger, setSelf }) => {
+      // initialize Recoil atom value with Jotai atom value
+      if (trigger === "get") {
+        setSelf(jotaiStore.get(jotaiCount));
+      }
+
+      // update Recoil atom when Jotai atom changes
+      const unsub = jotaiStore.sub(jotaiCount, () => {
+        setSelf(jotaiStore.get(jotaiCount));
+      });
+
+      // set Jotai atom when Recoil atom changes
+      onSet((newValue) => {
+        jotaiStore.set(jotaiCount, newValue);
+      });
+
+      // unsubcribe to Jotai store on cleanup
+      return unsub;
+    },
+  ],
 });
 
 const Count = () => {
   const [rCount, setRCount] = useRecoilState(recoilCount);
-  const jCount = useJotaiAtomValue(jotaiCount);
+  const [jCount, setJCount] = useJotaiAtom(jotaiCount);
 
-  const increment = useCallback(() => {
-    // setRCount((count) => count + 1);
-    setRCount(rCount + 1);
+  // Two renders here when incrementIng the recoil atom, because we're rendering both the
+  // recoil and jotai atoms, but there would be just one render if we were just rendering
+  // the recoil atom.  Only one render when you increment the jotai atom.
+  //
+  // When you increment the recoil atom it fires an atom effect that increments the
+  // underlying jotai atom.
+  console.log("render Count");
+
+  const incrementRecoil = useCallback(() => {
+    setRCount((count) => count + 1);
   }, [rCount, setRCount]);
 
+  const incrementJotai = useCallback(() => {
+    setJCount((count) => count + 1);
+  }, [rCount, setRCount]);
+
+  //  const incrementViaRecoilCallback = useIncrementViaRecoilCallback();
+
   return (
-    <div>
+    <div
+      style={{ display: "flex", flexDirection: "column", columnGap: "10px" }}
+    >
       <div>Recoil Count: {rCount}</div>
       <div>Jotai Count: {jCount}</div>
-      <button onClick={increment}>increment</button>
+      <button onClick={incrementRecoil}>increment Recoil count</button>
+      <button onClick={incrementJotai}>increment Jotai count</button>
     </div>
   );
 };
@@ -107,9 +74,7 @@ export const JotaiRecoilBridge = () => {
   return (
     <Provider store={jotaiStore}>
       <RecoilRoot>
-        <RecoilStoreProvider>
-          <Count />
-        </RecoilStoreProvider>
+        <Count />
       </RecoilRoot>
     </Provider>
   );
