@@ -2,10 +2,16 @@ import {
   atom as jotaiAtom,
   createStore,
   Provider,
+  useAtomValue,
   useAtomValue as useJotaiAtomValue,
 } from "jotai";
 import { useCallback } from "react";
-import { atom as recoilAtom, RecoilRoot, useRecoilState } from "recoil";
+import {
+  atom as recoilAtom,
+  RecoilRoot,
+  useRecoilCallback,
+  useRecoilState,
+} from "recoil";
 
 const jotaiStore = createStore();
 
@@ -36,9 +42,31 @@ const recoilCount = recoilAtom<number>({
   ],
 });
 
+const jotaiMagicSeed = jotaiAtom(1);
+
+const useMakeMagicNumber = () =>
+  useRecoilCallback(({ snapshot, set }) => async () => {
+    const seed = jotaiStore.get(jotaiMagicSeed);
+
+    const jCount1 = jotaiStore.get(jotaiCount);
+    console.log("jCount1", jCount1);
+
+    const count = await snapshot.getPromise(recoilCount);
+    const newCount = count * 2;
+    console.log("newCount (new magic seed)", newCount);
+
+    set(recoilCount, newCount);
+    jotaiStore.set(jotaiMagicSeed, newCount);
+
+    const jCount2 = jotaiStore.get(jotaiCount);
+    console.log("jCount2", jCount2);
+  });
+
 const Count = () => {
   const [rCount, setRCount] = useRecoilState(recoilCount);
   const jCount = useJotaiAtomValue(jotaiCount);
+  const magicSeed = useAtomValue(jotaiMagicSeed);
+  const makeMagicNumber = useMakeMagicNumber();
 
   // two renders here because of using recoil & jotai, but just one if we just use the recoil atom
   console.log("render Count");
@@ -51,7 +79,9 @@ const Count = () => {
     <div>
       <div>Recoil Count: {rCount}</div>
       <div>Jotai Count: {jCount}</div>
+      <div>Magic Seed: {magicSeed}</div>
       <button onClick={increment}>increment</button>
+      <button onClick={makeMagicNumber}>make magic</button>
     </div>
   );
 };
