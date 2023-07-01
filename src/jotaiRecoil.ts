@@ -2,40 +2,44 @@ import { useSetAtom } from "jotai/react";
 import { useHydrateAtoms } from "jotai/react/utils";
 import { atom } from "jotai/vanilla";
 import { selectAtom } from "jotai/vanilla/utils";
-import { MutableRefObject, useEffect, useRef } from "react";
-import { RecoilState, useGotoRecoilSnapshot, useRecoilSnapshot } from "recoil";
+import { RefObject, useEffect, useRef } from "react";
+import { RecoilState, useRecoilCallback, useRecoilSnapshot } from "recoil";
 import type { RecoilValue, Snapshot } from "recoil";
 
+type SetRecoilState = <T>(
+  recoilVal: RecoilState<T>,
+  valOrUpdater: ((currVal: T) => T) | T
+) => void;
+
 const recoilSnapshotAtom = atom<Snapshot | null>(null);
+const setRecoilStateAtom = atom<RefObject<SetRecoilState> | null>(null);
 
-type GotoSnapshot = (snapshot: Snapshot) => void;
-
-const gotoRecoilSnapshotRefAtom = atom<MutableRefObject<GotoSnapshot> | null>(
-  null
-);
-
+// TODO rename this hook, as it also grabs a recoil setter now
 export const useSyncRecoilSnapshot = () => {
   const setRecoilSnapshot = useSetAtom(recoilSnapshotAtom);
-  const setGotoRecoilSnapshot = useSetAtom(gotoRecoilSnapshotRefAtom);
   const snapshot = useRecoilSnapshot();
-  const gotoSnapshot = useGotoRecoilSnapshot();
-  const gotoSnapshotRef = useRef(gotoSnapshot);
+
+  let setRecoilState = null;
+
+  useRecoilCallback(({ set }) => {
+    setRecoilState = set;
+    return () => {}; // noop, not used
+  }, [])();
+
+  const setRecoilStateRef = useRef<SetRecoilState>(setRecoilState);
 
   useHydrateAtoms([
     [recoilSnapshotAtom, snapshot],
-    [gotoRecoilSnapshotRefAtom, gotoSnapshotRef],
+    [setRecoilStateAtom, setRecoilStateRef],
   ]);
 
   useEffect(() => {
     setRecoilSnapshot(snapshot);
   }, [snapshot, setRecoilSnapshot]);
-
-  useEffect(() => {
-    setGotoRecoilSnapshot(gotoSnapshotRef);
-  }, [gotoSnapshot, setGotoRecoilSnapshot]);
 };
 
-const selectRecoilValue = <T>(recoilValue: RecoilValue<T>) =>
+/** Create readonly Jotai atom that selects from underlying Recoil state. */
+export const selectRecoilValue = <T>(recoilValue: RecoilValue<T>) =>
   selectAtom(recoilSnapshotAtom, (snapshot, prevValue?: T) => {
     if (snapshot === null) {
       throw new Error("Missing useSyncRecoilSnapshot in the tree");
@@ -54,27 +58,22 @@ const selectRecoilValue = <T>(recoilValue: RecoilValue<T>) =>
     return loadable.contents;
   });
 
+/** Create read-write Jotai atom that reads and writes to underlying Recoil state. */
 export const atomWithRecoilValue = <T>(recoilState: RecoilState<T>) => {
   const recoilSelector = selectRecoilValue(recoilState);
 
   return atom(
     (get) => get(recoilSelector),
+
     (get, _set, newValue: T) => {
-      const snapshot = get(recoilSnapshotAtom);
-      if (snapshot === null) {
+      const setRecoilStateRef = get(setRecoilStateAtom);
+      const setRecoilState = setRecoilStateRef?.current;
+
+      if (!setRecoilState) {
         throw new Error("Missing useSyncRecoilSnapshot in the tree");
       }
 
-      const newSnapshot = snapshot.map(({ set }) => {
-        set(recoilState, newValue);
-      });
-
-      const gotoSnapshotRef = get(gotoRecoilSnapshotRefAtom);
-      if (gotoSnapshotRef === null) {
-        throw new Error("Missing useSyncRecoilSnapshot in the tree");
-      }
-
-      gotoSnapshotRef.current(newSnapshot);
+      setRecoilState(recoilState, newValue);
     }
   );
 };

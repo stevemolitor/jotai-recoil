@@ -3,7 +3,7 @@
 I started with a copy pasta from Daishi's
 [jotai-recoil](https://github.com/jotaijs/jotai-recoil) library, but extended to support
 mutable Jotai atom proxies. I removed the `dangerouslySyncInRender` option, 
-restructured slightly to avoid a TypeScript error.
+and restructured slightly to avoid a TypeScript error.
 
 Daishi's jotai-recoil library is read-only on the Jotai side. You can create a Jotai atom
 that will _read_ from a Recoil state. If you update the Recoil state via Recoil, the Jotai
@@ -24,24 +24,26 @@ good. However, it uses the Jotai `selectAtom` function (which supplies the previ
 see below), which as the name implieas is read-only.
 
 The implementation of `selectRecoilValue` is synchronous, and returns the previous value
-while a new Recoil value is asynchronous loading. It will not suspend. We will want to
-consider a variation that supports suspense.
+while a new Recoil value is asynchronous loading. It will not suspend. 
 
 ## How I Made It Mutable
 
-_Warning_: this is crazy, dicey, and probably ill advised.
+In
+[useSyncRecoilSnapshot](https://github.com/stevemolitor/jotai-recoil/blob/jotai-recoil-with-mutate/src/jotaiRecoil.ts#L21-L33)
+I captured the `set` function passed to `useRecoilCallback` and put it in a
+`setRecoilStateAtom` Jotai atom. Except that you can't put a function in a Jotai atom
+directly, because Jotai think's its an atom setter function and tries to call it. So I
+wrapped the setter function in a ref and put _that_ in a Jotai atom.
 
-I added a new Jotai atom factory function, `atomWithRecoilValue`. It delegates to a
-read-only `selectRecoilValue` for its getter.  For the setter, I updated
-`useSyncRecoilSnapshot` to also use `useGotoRecoilSnapshot`, and sync and put the
-`gotoSnapshot` function in a Jotai atom. Except that you can't put a function in a Jotai
-atom directly, because Jotai think's its an atom setter function and tries to call it. So
-I wrapped `gotoSnapshot` in a ref and put that in a Jotai atom.
+I added a new Jotai atom factory function,
+[`atomWithRecoilValue`](https://github.com/stevemolitor/jotai-recoil/blob/jotai-recoil-with-mutate/src/jotaiRecoil.ts#L61-L75). It
+delegates to a read-only `selectRecoilValue` atom for its getter. For the setter, it uses
+the Recoil setter from the `setRecoilStateAtom` Jotai atom that was hydrated in
+`useSyncRecoilSnapshot` (via the ref wrapper).
 
-In the atom setter, I grabbed both the current Recoil snapshot and gotoSnapshot from their
-respective Jotai atoms. I produce a new version of the snapshot using `snapshot.map`,
-setting the recoil value to the value passes to the Jotai setter.  It works in this
-simple, syncronous example. Will it cause everything to re-render, or just the changed
-atom in the new snapshot? I'm hoping the latter but haven't verified yet. Another concern
-is what happens with async activities? Will we risk missing updates and horrific race
-conditions when we replace the old snapshot with the new one?
+## Related
+
+The _tiny_ `recoil-nexus` library uses a similar technique, except that curiously it [uses](https://github.com/luisanton-io/recoil-nexus/blob/master/src/RecoilNexus.tsx#L31-L36) the `set` function passed to `useRecoilCallback` to set writable Recoil selectors as I do here, but uses the `set` function passed to `useRecoilTransaction_UNSTABLE` to set Recoil atoms. Maybe there's a reason 🤷? 
+Also note that `recoil-nexus` supports getting a promise, and resetting atom values. We could steal those bits.
+
+See this [StackOverflow](https://stackoverflow.com/questions/68945574/how-to-update-atoms-state-in-recoil-js-outside-components-react) discussing these techniques for using Recoil outside of a React component.
